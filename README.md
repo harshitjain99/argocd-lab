@@ -302,6 +302,79 @@ kubectl patch application nginx-demo -n argocd --type merge -p '{"operation":{"s
 
 ---
 
+## Troubleshooting
+
+
+### 1 — Check Application Status
+
+```bash
+# Quick status
+kubectl get application nginx-demo -n argocd
+
+# Detailed — shows sync history, events, errors
+kubectl describe application nginx-demo -n argocd
+```
+
+What to look for:
+- SYNC STATUS: Synced = good, OutOfSync = Git and cluster don't match
+- HEALTH STATUS: Healthy = good, Degraded/Progressing/Missing = problem
+- Events section at the bottom — shows sync attempts and errors
+
+
+### 2 — Check Argo CD Component Logs
+
+```bash
+# Application Controller — handles sync/reconciliation (most important)
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=50
+
+# Repo Server — clones Git repos, generates manifests
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=50
+
+# API Server — serves UI and API
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=50
+```
+
+Which log to check when:
+- App not syncing              → application-controller
+- Git clone/auth errors        → repo-server
+- UI not loading               → argocd-server
+
+
+### 3 — Common Issues
+
+| Problem | What to Check |
+|---|---|
+| App stuck OutOfSync | `kubectl describe application` — look at Events for error |
+| Git auth failure | repo-server logs — wrong URL or private repo without credentials |
+| Pods not starting | `kubectl get pods -n demo` + `kubectl describe pod <name> -n demo` |
+| Sync succeeded but no change | Check if the right commit hash is in the Revision field |
+| selfHeal not working | Verify `selfHeal: true` in syncPolicy |
+| Namespace not created | Check `CreateNamespace=true` in syncOptions |
+
+
+### 4 — Force a Manual Sync
+
+Instead of waiting 3 minutes for Argo CD to poll:
+
+```bash
+kubectl patch application nginx-demo -n argocd --type merge -p '{"operation":{"sync":{}}}'
+```
+
+
+### 5 — Check Argo CD Pods Health
+
+```bash
+kubectl get pods -n argocd
+```
+
+If any pod is CrashLoopBackOff or not Running, check its logs:
+
+```bash
+kubectl logs -n argocd <pod-name>
+```
+
+---
+
 ## Cleanup
 
 ```bash
